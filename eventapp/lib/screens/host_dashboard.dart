@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // For date formatting
+import 'package:animate_do/animate_do.dart'; // For animations
 import '../services/firebase_service.dart';
 import '../models/announcement_model.dart';
 import '../models/usermodel.dart';
 import '../utils/constants.dart'; // For AppColors, AppTextStyles, UserRole
-
-// DO NOT import login_screen.dart here. Navigation back to login
-// is handled by the StreamBuilder in main.dart after signOut().
+import '../widgets/announcement_card.dart'; // Reusable widget
 
 class HostDashboardScreen extends StatefulWidget {
   const HostDashboardScreen({super.key});
@@ -23,15 +22,15 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
 
   final _userFormKey = GlobalKey<FormState>();
   final TextEditingController _userEmailController = TextEditingController();
-  UserRole _selectedUserRole = UserRole.student;
+  UserRole _selectedUserRole = UserRole.student; // Default role
 
-  final TextEditingController _profileNameController = TextEditingController(); // New controller for profile name
+  final TextEditingController _profileNameController = TextEditingController();
 
   UserModel? _currentUser;
-  bool _isLoading = true; // For initial user data loading
+  bool _isLoading = true;
   String? _errorMessage;
-  bool _isAddingUser = false; // For adding/updating user roles
-  bool _isUpdatingProfile = false; // For updating user profile name
+  bool _isAddingUser = false;
+  bool _isUpdatingProfile = false;
 
   final FirebaseService _firebaseService = FirebaseService();
 
@@ -46,32 +45,25 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     _headingController.dispose();
     _messageController.dispose();
     _userEmailController.dispose();
-    _profileNameController.dispose(); // Dispose new controller
+    _profileNameController.dispose();
     super.dispose();
   }
 
   Future<void> _loadCurrentUser() async {
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
     try {
       _currentUser = await _firebaseService.getCurrentUserModel();
       if (_currentUser == null) {
         _errorMessage = "Could not load user data. Please re-login.";
       } else {
-        _profileNameController.text = _currentUser!.displayName; // Set initial value for profile name
+        _profileNameController.text = _currentUser!.displayName;
       }
     } catch (e) {
       _errorMessage = "Error loading user: $e";
       print("Error loading current user: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -84,43 +76,32 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
       builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
-            primaryColor: AppColors.primaryColor,
-            colorScheme: const ColorScheme.light(primary: AppColors.primaryColor),
-            buttonTheme: const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+            ),
+            dialogBackgroundColor: Colors.white,
           ),
           child: child!,
         );
       },
     );
-    if (picked != null && picked != _selectedDate) {
-      if (mounted) {
-        setState(() {
-          _selectedDate = picked;
-        });
-      }
+    if (picked != null && picked != _selectedDate && mounted) {
+      setState(() => _selectedDate = picked);
     }
   }
 
   Future<void> _createAnnouncement() async {
     if (_announcementFormKey.currentState!.validate()) {
       if (_selectedDate == null) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = "Please select an event date.";
-          });
-        }
+        if (mounted) setState(() => _errorMessage = "Please select an event date.");
         return;
       }
       if (_currentUser == null) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = "User data not loaded. Cannot create announcement.";
-          });
-        }
+        if (mounted) setState(() => _errorMessage = "User data not loaded.");
         return;
       }
-
-      if (!mounted) return;
 
       setState(() {
         _isLoading = true;
@@ -148,11 +129,11 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
             _isLoading = false;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Announcement created successfully!'),
+                content: Text('Announcement created successfully!', style: AppTextStyles.bodyText.copyWith(color: Colors.white)),
                 backgroundColor: AppColors.successColor,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                margin: const EdgeInsets.all(10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.all(12),
               ),
             );
           });
@@ -171,8 +152,6 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
 
   Future<void> _addGraduateUser() async {
     if (_userFormKey.currentState!.validate()) {
-      if (!mounted) return;
-
       setState(() {
         _isAddingUser = true;
         _errorMessage = null;
@@ -183,18 +162,17 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
         final role = _selectedUserRole;
 
         await _firebaseService.addGraduateUser(email, role);
-
         _userEmailController.clear();
         if (mounted) {
           setState(() {
             _isAddingUser = false;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('User "$email" added/updated with role: ${role.name}!'),
+                content: Text('User "$email" added/updated with role: ${StringCasingExtension(role.name).capitalize()}!', style: AppTextStyles.bodyText.copyWith(color: Colors.white)),
                 backgroundColor: AppColors.successColor,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                margin: const EdgeInsets.all(10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.all(12),
               ),
             );
           });
@@ -211,7 +189,6 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     }
   }
 
-  // NEW: Method to update the current user's display name
   Future<void> _updateProfileName() async {
     if (!mounted || _currentUser == null) return;
 
@@ -222,13 +199,9 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
 
     try {
       final newName = _profileNameController.text.trim();
-      if (newName.isEmpty) {
-        throw 'Name cannot be empty.';
-      }
+      if (newName.isEmpty) throw 'Name cannot be empty.';
 
       await _firebaseService.updateUserName(_currentUser!.uid, newName);
-
-      // Update the local UserModel instance
       _currentUser = _currentUser!.copyWith(displayName: newName);
 
       if (mounted) {
@@ -236,11 +209,11 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
           _isUpdatingProfile = false;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Profile name updated successfully!'),
+              content: Text('Profile name updated successfully!', style: AppTextStyles.bodyText.copyWith(color: Colors.white)),
               backgroundColor: AppColors.successColor,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              margin: const EdgeInsets.all(10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(12),
             ),
           );
         });
@@ -259,409 +232,549 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
-      appBar: AppBar(
-        title: const Text('Host Dashboard'),
-        // No actions here, profile icon will be in the body
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryColor))
-          : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.borderRadius),
-                    child: Text(
-                      _errorMessage!,
-                      style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor),
-                      textAlign: TextAlign.center,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primaryColor.withOpacity(0.9), AppColors.backgroundColor],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              expandedHeight: 200.0,
+              floating: false,
+              pinned: true,
+              flexibleSpace: FlexibleSpaceBar(
+                title: FadeInDown(
+                  child: Text(
+                    'Host Dashboard',
+                    style: AppTextStyles.heading2.copyWith(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppColors.primaryColor, AppColors.primaryColor.withOpacity(0.7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
-                )
-              : SingleChildScrollView(
-                  padding: AppSpacing.screenPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // --- Profile Section ---
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 20),
-                        child: Padding(
-                          padding: AppSpacing.cardPadding,
+                  child: Center(
+                    child: FadeInUp(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: Colors.white,
+                            child: Icon(Icons.account_circle, size: 50, color: AppColors.primaryColor),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Welcome, ${_currentUser?.displayName?.split(' ').first ?? 'Host'}!',
+                            style: AppTextStyles.bodyText.copyWith(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton.icon(
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                  label: const Text('Logout', style: TextStyle(color: Colors.white)),
+                  onPressed: () async => await _firebaseService.signOut(),
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
+            SliverToBoxAdapter(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.primaryColor))
+                  : _errorMessage != null
+                      ? Padding(
+                          padding: const EdgeInsets.all(AppSpacing.borderRadius),
+                          child: Text(
+                            _errorMessage!,
+                            style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor, fontSize: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : Padding(
+                          padding: AppSpacing.screenPadding,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.account_circle, size: 40, color: AppColors.primaryColor),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    'Welcome, ${_currentUser?.displayName ?? 'Host'}!',
-                                    style: AppTextStyles.heading2.copyWith(color: AppColors.primaryColor),
+                              // Profile Management
+                              FadeInLeft(
+                                child: _buildSectionCard(
+                                  title: 'Your Profile',
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Email: ${_currentUser?.email ?? 'N/A'}',
+                                        style: AppTextStyles.bodyText.copyWith(color: Colors.grey[800]),
+                                      ),
+                                      const SizedBox(height: 15),
+                                      Text(
+                                        'Update Display Name:',
+                                        style: AppTextStyles.bodyText.copyWith(fontWeight: FontWeight.bold, color: AppColors.primaryColor),
+                                      ),
+                                      const SizedBox(height: 10),
+_buildTextField(
+  controller: _profileNameController,
+  label: 'Display Name',
+  hint: 'e.g., Joel Joseph',
+),
+                                      const SizedBox(height: 15),
+                                      Center(
+                                        child: _buildAnimatedButton(
+                                          label: _isUpdatingProfile ? 'Saving...' : 'Save Profile',
+                                          icon: _isUpdatingProfile ? null : Icons.save,
+                                          onPressed: _isUpdatingProfile ? null : _updateProfileName,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const Spacer(),
-                                  IconButton(
-                                    icon: const Icon(Icons.logout, color: AppColors.textColor),
-                                    tooltip: 'Logout',
-                                    onPressed: () async {
-                                      await _firebaseService.signOut();
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 15),
-                              Text(
-                                'Email: ${_currentUser?.email ?? 'N/A'}',
-                                style: AppTextStyles.bodyText,
-                              ),
-                              const SizedBox(height: 15),
-                              Text(
-                                'Edit Profile Name:',
-                                style: AppTextStyles.bodyText.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 5),
-                              TextFormField(
-                                controller: _profileNameController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Display Name',
-                                  hintText: 'Enter your preferred name',
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Name cannot be empty';
-                                  }
-                                  return null;
-                                },
                               ),
-                              const SizedBox(height: 15),
-                              Center(
-                                child: ElevatedButton(
-                                  onPressed: _isUpdatingProfile ? null : _updateProfileName,
-                                  child: _isUpdatingProfile
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text('Save Profile'),
+                              const SizedBox(height: 30),
+
+                              // Create Announcement
+                              FadeInRight(
+                                child: _buildSectionCard(
+                                  title: 'Create New Announcement',
+                                  child: Form(
+                                    key: _announcementFormKey,
+                                    child: Column(
+                                      children: [
+                                        _buildTextField(
+                                          controller: _headingController,
+                                          label: 'Heading',
+                                          hint: 'Enter announcement heading',
+                                        ),
+                                        const SizedBox(height: 15),
+                                        _buildTextField(
+                                          controller: _messageController,
+                                          label: 'Message',
+                                          hint: 'Enter detailed message',
+                                          maxLines: 5,
+                                        ),
+                                        const SizedBox(height: 15),
+                                        _buildDatePicker(),
+                                        const SizedBox(height: 20),
+                                        _buildAnimatedButton(
+                                          label: _isLoading ? 'Creating...' : 'Create Announcement',
+                                          icon: _isLoading ? null : Icons.add,
+                                          onPressed: _isLoading ? null : _createAnnouncement,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+
+                              // Manage User Roles
+                              FadeInLeft(
+                                child: _buildSectionCard(
+                                  title: 'Manage User Roles',
+                                  child: Form(
+                                    key: _userFormKey,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _buildTextField(
+                                          controller: _userEmailController,
+                                          label: 'User Email',
+                                          hint: 'Enter email of the graduate',
+                                          keyboardType: TextInputType.emailAddress,
+                                        ),
+                                        const SizedBox(height: 15),
+                                        _buildDropdown(),
+                                        const SizedBox(height: 20),
+                                        _buildAnimatedButton(
+                                          label: _isAddingUser ? 'Adding...' : 'Add/Update User Role',
+                                          icon: _isAddingUser ? null : Icons.person_add,
+                                          onPressed: _isAddingUser ? null : _addGraduateUser,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+
+                              // Announcements
+                              FadeInUp(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Your Announcements',
+                                      style: AppTextStyles.heading2.copyWith(color: AppColors.primaryColor, fontSize: 22),
+                                    ),
+                                    const SizedBox(height: 15),
+                                    _buildAnnouncementsList(),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                      // --- Create New Announcement Section ---
-                      Text(
-                        'Create New Announcement',
-                        style: AppTextStyles.heading2,
-                      ),
-                      const SizedBox(height: 20),
-                      Form(
-                        key: _announcementFormKey,
-                        child: Column(
-                          children: [
-                            TextFormField(
-                              controller: _headingController,
-                              decoration: const InputDecoration(
-                                labelText: 'Heading',
-                                hintText: 'Enter announcement heading',
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter a heading';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 15),
-                            TextFormField(
-                              controller: _messageController,
-                              decoration: const InputDecoration(
-                                labelText: 'Message',
-                                hintText: 'Enter detailed message for the announcement',
-                                alignLabelWithHint: true,
-                              ),
-                              maxLines: 5,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter a message';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 15),
-                            GestureDetector(
-                              onTap: () => _selectDate(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryColor.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(AppSpacing.buttonRadius),
-                                  border: Border.all(color: AppColors.primaryColor.withOpacity(0.3)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.calendar_today, color: AppColors.primaryColor),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      _selectedDate == null
-                                          ? 'Select Event Date'
-                                          : 'Date: ${DateFormat('EEE, MMM d, yyyy').format(_selectedDate!)}',
-                                      style: AppTextStyles.bodyText.copyWith(color: AppColors.primaryColor),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 30),
-                            Center(
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _createAnnouncement,
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text('Create Announcement'),
-                              ),
-                            ),
-                          ],
+  Widget _buildSectionCard({required String title, required Widget child}) {
+    return Card(
+      elevation: 10,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.white, Colors.grey[100]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: AppSpacing.cardPadding * 1.5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTextStyles.heading2.copyWith(
+                  color: AppColors.primaryColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Divider(height: 20, thickness: 2, color: AppColors.primaryColor),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return FadeIn(
+      child: TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.9),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.primaryColor.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+          ),
+          labelStyle: AppTextStyles.bodyText.copyWith(color: AppColors.primaryColor),
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter $label.toLowerCase()';
+          }
+          if (label == 'User Email' && !RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+            return 'Please enter a valid email address';
+          }
+          return null;
+        },
+        style: AppTextStyles.bodyText.copyWith(color: Colors.grey[800]),
+      ),
+    );
+  }
+
+  Widget _buildDatePicker() {
+    return FadeIn(
+      child: GestureDetector(
+        onTap: () => _selectDate(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primaryColor.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryColor.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_today, color: AppColors.primaryColor, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                _selectedDate == null
+                    ? 'Select Event Date'
+                    : 'Date: ${DateFormat('EEE, MMM d, yyyy').format(_selectedDate!)}',
+                style: AppTextStyles.bodyText.copyWith(
+                  color: AppColors.primaryColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdown() {
+    return FadeIn(
+      child: DropdownButtonFormField<UserRole>(
+        value: _selectedUserRole,
+        decoration: InputDecoration(
+          labelText: 'Assign Role',
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.9),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.primaryColor.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+          ),
+        ),
+        items: UserRole.values
+            .where((role) => role != UserRole.host && role != UserRole.unknown)
+            .map((role) => DropdownMenuItem(
+                  value: role,
+                  child: Text(
+
+                    StringCasingExtension(role.name).capitalize(),
+                    style: AppTextStyles.bodyText.copyWith(color: Colors.grey[800]),
+                  ),
+                ))
+            .toList(),
+        onChanged: (UserRole? newValue) {
+          if (newValue != null) setState(() => _selectedUserRole = newValue);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAnimatedButton({
+    required String label,
+    IconData? icon,
+    required VoidCallback? onPressed,
+  }) {
+    return ZoomIn(
+      child: ElevatedButton.icon(
+        icon: icon != null
+            ? Icon(icon, size: 20, color: Colors.white)
+            : const SizedBox.shrink(),
+        label: Text(
+          label,
+          style: AppTextStyles.bodyText.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 5,
+          shadowColor: AppColors.primaryColor.withOpacity(0.4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementsList() {
+    return StreamBuilder<List<Announcement>>(
+      stream: _firebaseService.getAnnouncements(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primaryColor));
+        }
+        if (snapshot.hasError) {
+          print('Error fetching announcements: ${snapshot.error}');
+          return Center(
+            child: Text(
+              'Error loading announcements: ${snapshot.error}',
+              style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor),
+            ),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: AppSpacing.cardPadding,
+              child: Text(
+                'No announcements created yet.',
+                style: AppTextStyles.bodyText.copyWith(color: AppColors.lightTextColor),
+              ),
+            ),
+          );
+        }
+
+        final hostAnnouncements = snapshot.data!.where((announcement) => announcement.hostId == _currentUser?.uid).toList();
+
+        if (hostAnnouncements.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: AppSpacing.cardPadding,
+              child: Text(
+                'You have not created any announcements yet.',
+                style: AppTextStyles.bodyText.copyWith(color: AppColors.lightTextColor),
+              ),
+            ),
+          );
+        }
+
+        final Set<String> allGuestUids = {};
+        for (var announcement in hostAnnouncements) {
+          allGuestUids.addAll(announcement.guestResponses.keys);
+        }
+
+        return FutureBuilder<Map<String, UserModel>>(
+          future: _firebaseService.getUsersMapByUids(allGuestUids.toList()),
+          builder: (context, usersSnapshot) {
+            if (usersSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.primaryColor));
+            }
+            if (usersSnapshot.hasError) {
+              print('Error fetching guest user details: ${usersSnapshot.error}');
+              return Center(
+                child: Text(
+                  'Error loading guest details: ${usersSnapshot.error}',
+                  style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor),
+                ),
+              );
+            }
+
+            final Map<String, UserModel> guestUsersMap = usersSnapshot.data ?? {};
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: hostAnnouncements.length,
+              itemBuilder: (context, index) {
+                final announcement = hostAnnouncements[index];
+                return FadeInUp(
+                  delay: Duration(milliseconds: index * 100),
+                  child: Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.white, Colors.grey[50]!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(height: 40),
-
-                      // --- Manage User Roles Section ---
-                      Text(
-                        'Manage User Roles',
-                        style: AppTextStyles.heading2,
-                      ),
-                      const SizedBox(height: 20),
-                      Form(
-                        key: _userFormKey,
+                      child: Padding(
+                        padding: AppSpacing.cardPadding,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            TextFormField(
-                              controller: _userEmailController,
-                              decoration: const InputDecoration(
-                                labelText: 'User Email',
-                                hintText: 'Enter email of the graduate',
-                              ),
-                              keyboardType: TextInputType.emailAddress,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter an email';
-                                }
-                                if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                                  return 'Please enter a valid email address';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 15),
-                            DropdownButtonFormField<UserRole>(
-                              value: _selectedUserRole,
-                              decoration: InputDecoration(
-                                labelText: 'Assign Role',
-                                border: const OutlineInputBorder(),
-                                filled: true,
-                                fillColor: AppColors.primaryColor.withOpacity(0.05), // Light fill color
-                              ),
-                              items: UserRole.values.where((role) => role != UserRole.host && role != UserRole.unknown).map((role) {
-                                return DropdownMenuItem(
-                                  value: role,
-                                  child: Text(role.name.capitalize()),
-                                );
-                              }).toList(),
-                              onChanged: (UserRole? newValue) {
-                                if (newValue != null) {
-                                  setState(() {
-                                    _selectedUserRole = newValue;
-                                  });
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 30),
-                            Center(
-                              child: ElevatedButton(
-                                onPressed: _isAddingUser ? null : _addGraduateUser,
-                                child: _isAddingUser
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text('Add/Update User Role'),
+                            Text(
+                              announcement.heading,
+                              style: AppTextStyles.heading2.copyWith(
+                                color: AppColors.primaryColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            Text(
+                              announcement.message,
+                              style: AppTextStyles.bodyText.copyWith(color: Colors.grey[800]),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Event Date: ${DateFormat('EEE, MMM d, yyyy').format(announcement.eventDate)}',
+                              style: AppTextStyles.bodyText.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[600]),
+                            ),
+                            Text(
+                              'Created: ${DateFormat('MMM d, yyyy HH:mm').format(announcement.createdAt)}',
+                              style: AppTextStyles.bodyText.copyWith(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Guest Responses:',
+                              style: AppTextStyles.bodyText.copyWith(fontWeight: FontWeight.bold, color: AppColors.primaryColor),
+                            ),
+                            if (announcement.guestResponses.isEmpty)
+                              Text(
+                                'No responses yet.',
+                                style: AppTextStyles.bodyText.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[600]),
+                              )
+                            else
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: announcement.guestResponses.entries.map((entry) {
+                                  final guestUid = entry.key;
+                                  final response = entry.value;
+                                  final guestName = guestUsersMap[guestUid]?.displayName ?? 'Unknown User';
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                                    child: Text(
+                                      '• $guestName: ${StringCasingExtension(response).capitalize()}',
+                                      style: AppTextStyles.bodyText.copyWith(fontSize: 14, color: Colors.grey[700]),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 40),
-
-                      // --- Display Existing Announcements ---
-                      Text(
-                        'Your Announcements',
-                        style: AppTextStyles.heading2,
-                      ),
-                      const SizedBox(height: 10),
-                      StreamBuilder<List<Announcement>>(
-                        stream: _firebaseService.getAnnouncements(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(
-                              child: CircularProgressIndicator(color: AppColors.primaryColor),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            print('Error fetching announcements: ${snapshot.error}');
-                            return Center(
-                              child: Text(
-                                'Error loading announcements: ${snapshot.error}',
-                                style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor),
-                              ),
-                            );
-                          }
-                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return Center(
-                              child: Padding(
-                                padding: AppSpacing.cardPadding,
-                                child: Text(
-                                  'No announcements created yet.',
-                                  style: AppTextStyles.bodyText.copyWith(color: AppColors.lightTextColor),
-                                ),
-                              ),
-                            );
-                          }
-
-                          final hostAnnouncements = snapshot.data!.where((announcement) {
-                            return announcement.hostId == _currentUser?.uid;
-                          }).toList();
-
-                          if (hostAnnouncements.isEmpty) {
-                            return Center(
-                              child: Padding(
-                                padding: AppSpacing.cardPadding,
-                                child: Text(
-                                  'You have not created any announcements yet.',
-                                  style: AppTextStyles.bodyText.copyWith(color: AppColors.lightTextColor),
-                                ),
-                              ),
-                            );
-                          }
-
-                          final Set<String> allGuestUids = {};
-                          for (var announcement in hostAnnouncements) {
-                            allGuestUids.addAll(announcement.guestResponses.keys);
-                          }
-
-                          return FutureBuilder<Map<String, UserModel>>(
-                            future: _firebaseService.getUsersMapByUids(allGuestUids.toList()),
-                            builder: (context, usersSnapshot) {
-                              if (usersSnapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(color: AppColors.primaryColor),
-                                );
-                              }
-                              if (usersSnapshot.hasError) {
-                                print('Error fetching guest user details: ${usersSnapshot.error}');
-                                return Center(
-                                  child: Text(
-                                    'Error loading guest details: ${usersSnapshot.error}',
-                                    style: AppTextStyles.bodyText.copyWith(color: AppColors.errorColor),
-                                  ),
-                                );
-                              }
-
-                              final Map<String, UserModel> guestUsersMap = usersSnapshot.data ?? {};
-
-                              return ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: hostAnnouncements.length,
-                                itemBuilder: (context, index) {
-                                  final announcement = hostAnnouncements[index];
-                                  return Card(
-                                    margin: const EdgeInsets.symmetric(vertical: 8.0),
-                                    child: Padding(
-                                      padding: AppSpacing.cardPadding,
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            announcement.heading,
-                                            style: AppTextStyles.heading2.copyWith(color: AppColors.primaryColor),
-                                          ),
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            announcement.message,
-                                            style: AppTextStyles.bodyText,
-                                          ),
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            'Event Date: ${DateFormat('EEE, MMM d, yyyy').format(announcement.eventDate)}',
-                                            style: AppTextStyles.bodyText.copyWith(fontStyle: FontStyle.italic),
-                                          ),
-                                          Text(
-                                            'Created: ${DateFormat('MMM d, yyyy HH:mm').format(announcement.createdAt)}',
-                                            style: AppTextStyles.bodyText.copyWith(fontSize: 12),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            'Guest Responses:',
-                                            style: AppTextStyles.bodyText.copyWith(fontWeight: FontWeight.bold),
-                                          ),
-                                          if (announcement.guestResponses.isEmpty)
-                                            Text(
-                                              'No responses yet.',
-                                              style: AppTextStyles.bodyText.copyWith(fontStyle: FontStyle.italic),
-                                            )
-                                          else
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: announcement.guestResponses.entries.map((entry) {
-                                                final guestUid = entry.key;
-                                                final response = entry.value;
-                                                final guestName = guestUsersMap[guestUid]?.displayName ?? 'Unknown User';
-
-                                                return Padding(
-                                                  padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                                                  child: Text(
-                                                    '• $guestName: ${response.capitalize()}', // Capitalize response for display
-                                                    style: AppTextStyles.bodyText.copyWith(fontSize: 14),
-                                                  ),
-                                                );
-                                              }).toList(),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
 
-// Extension to capitalize first letter for display in dropdown and responses
 extension StringCasingExtension on String {
   String capitalize() => length > 0 ? '${this[0].toUpperCase()}${substring(1).toLowerCase()}' : '';
 }
